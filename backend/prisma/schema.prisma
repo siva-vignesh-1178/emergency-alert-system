@@ -1,0 +1,151 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  STUDENT
+  RESPONDER
+  ADMIN
+}
+
+enum AlertCategory {
+  SECURITY
+  MEDICAL
+}
+
+enum AlertStatus {
+  PENDING
+  ACKNOWLEDGED
+  ESCALATED
+  RESOLVED
+  CANCELLED
+}
+
+enum ResponderType {
+  SECURITY
+  MEDICAL
+}
+
+enum AuditAction {
+  CREATED
+  SEEN
+  ACKNOWLEDGED
+  ESCALATED
+  RESOLVED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  studentId    String?  @unique
+  name         String
+  email        String   @unique
+  passwordHash String
+  phone        String?
+
+  role         UserRole @default(STUDENT)
+  isActive     Boolean  @default(true)
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  alerts       Alert[]  @relation("StudentAlerts")
+  responder    Responder?
+  auditLogs    AuditLog[] @relation("UserAuditLogs")
+}
+
+model Responder {
+  id          String        @id @default(uuid())
+  userId      String        @unique
+  type        ResponderType
+  tier        Int
+  isAvailable Boolean       @default(true)
+
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  acknowledgments Acknowledgment[]
+  escalations     EscalationHistory[]
+}
+
+model Alert {
+  id             String        @id @default(uuid())
+  studentId      String
+
+  category       AlertCategory
+  status         AlertStatus   @default(PENDING)
+
+  latitude       Float
+  longitude      Float
+  accuracy       Float?
+
+  message        String?
+
+  currentTier    Int           @default(1)
+
+  createdAt      DateTime      @default(now())
+  acknowledgedAt DateTime?
+  escalatedAt    DateTime?
+  resolvedAt     DateTime?
+  cancelledAt    DateTime?
+
+  student         User                @relation("StudentAlerts", fields: [studentId], references: [id])
+  acknowledgments Acknowledgment[]
+  escalations     EscalationHistory[]
+  auditLogs       AuditLog[]
+
+  @@index([status])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model Acknowledgment {
+  id             String   @id @default(uuid())
+  alertId        String
+  responderId    String
+  acknowledgedAt DateTime @default(now())
+  notes          String?
+
+  alert     Alert     @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  responder Responder @relation(fields: [responderId], references: [id])
+
+  @@unique([alertId, responderId])
+}
+
+model EscalationHistory {
+  id         String   @id @default(uuid())
+  alertId    String
+  responderId String?
+
+  fromTier   Int
+  toTier     Int
+  reason     String
+
+  createdAt  DateTime @default(now())
+
+  alert      Alert      @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  responder  Responder? @relation(fields: [responderId], references: [id])
+}
+
+model AuditLog {
+  id        String      @id @default(uuid())
+  alertId   String
+  userId    String?
+
+  action    AuditAction
+  details   Json?
+
+  createdAt DateTime    @default(now())
+
+  alert Alert @relation(fields: [alertId], references: [id], onDelete: Cascade)
+  user  User? @relation("UserAuditLogs", fields: [userId], references: [id])
+
+  @@index([alertId])
+  @@index([createdAt])
+}
