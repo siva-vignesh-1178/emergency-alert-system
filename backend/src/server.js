@@ -1,6 +1,12 @@
 require("dotenv").config();
 
 const express = require("express");
+
+// your existing imports
+
+require("./workers/alertEscalationWorker");
+
+
 const cors = require("cors");
 const helmet = require("helmet");
 const http = require("http");
